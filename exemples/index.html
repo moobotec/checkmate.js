@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>checkmate.js</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <link href="checkmat.css" rel="stylesheet">
+</head>
+<body>
+    <h1 class="text-center">checkmate.js</h1>
+    <p class="text-center">Découvrez la puissance de checkmate.js : une bibliothèque JavaScript interactive pour apprendre, visualiser et expérimenter les mouvements d'échecs. Cliquez sur les boutons ci-dessous pour explorer toutes ses fonctionnalités.</p>
+    <div class="container">
+        <div id="checkmatContainer"></div>
+    </div>
+   
+    <footer class="bg-dark text-center text-lg-start mt-5">
+        <!-- Copyright -->
+        <div class="text-center p-3 bg-light">
+            © 2024 Copyright
+            <a href="https://www.timecaps.io/">www.timecaps.io</a><br>
+            <p id="versionInfo" class="text-muted"></p> <!-- Conteneur pour les versions dynamiques -->
+            <a href="#" onclick="window.scrollTo({ top: 0, behavior: 'smooth' });" class="btn btn-sm btn-primary">⬆️ Haut de la page</a>
+        </div>
+    </footer>
+
+    <!-- Chargement de jQuery via CDN -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    
+    <!-- Chargement de Bootstrap JS via CDN -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+
+    <script type="module" src="checkmat.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const versionInfo = document.getElementById("versionInfo");
+            let versions = [];
+
+            // Vérifie et affiche la version de CodeInputBuilder
+            if ($.fn.checkmatBuilder && $.fn.checkmatBuilder.version) {
+                versions.push(`[ checkmate.js v${$.fn.checkmatBuilder.version} ]`);
+            }
+
+            // Vérifie et affiche la version de jQuery avec l'icône
+            if (typeof jQuery !== "undefined" && jQuery.fn.jquery) {
+                versions.push(`[ <i class="fab fa-js-square"></i> jQuery v${jQuery.fn.jquery}] `);
+            }
+
+            // Vérifie et affiche la version de Bootstrap avec l'icône
+            if (typeof bootstrap !== "undefined" && bootstrap.Tooltip && bootstrap.Tooltip.VERSION) {
+                versions.push(`[ <i class="fab fa-bootstrap"></i> Bootstrap v${bootstrap.Tooltip.VERSION} ]`);
+            }
+
+             // Ajout manuel de la version de Font Awesome
+            const fontAwesomeVersion = "5.15.4"; // Remplacez par la version actuelle si nécessaire
+            versions.push(`[ <i class="fab fa-font-awesome"></i> Font Awesome v${fontAwesomeVersion} ]`);
+
+            // Affiche les versions dans le conteneur HTML
+            if (versions.length > 0) {
+                versionInfo.innerHTML = `${versions.join(" ")}`;
+            }
+
+        });
+
+        $(document).ready(function() {
+            $('#checkmatContainer').checkmatBuilder({});
+        });
+    
+    </script>
+</body>
+</html>
