@@ -43,7 +43,7 @@ Ajoutez les fichiers nécessaires à votre projet web. checkmat.js dépend de jQ
 
 Le fichier CSS `checkmate.css` personnalise l'apparence du module 
 
-### 3. Dépendances
+### 4. Dépendances
 
 - [jQuery](https://jquery.com) (3.5.1+)
 - [Bootstrap](https://getbootstrap.com) (4.5.2+)
