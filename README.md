@@ -1,5 +1,5 @@
 
-# checkmat.js
+# **checkmat.js**
 
 CheckMat.js est une bibliothèque JavaScript complète et autonome dédiée à l'affichage, la manipulation, et l'interaction avec des jeux d'échecs. Cette bibliothèque est conçue pour être flexible, intuitive et facilement intégrable dans tout projet web.
 
@@ -7,12 +7,27 @@ CheckMat.js est une bibliothèque JavaScript complète et autonome dédiée à l
 
 ## **Fonctionnalités principales**
 
-- **Échiquier interactif :** Créez un échiquier complet avec gestion des pièces, surbrillances dynamiques et interactions utilisateurs.
-- **Validation des règles :** Support complet des règles du jeu d'échecs, incluant le roque, la prise en passant, et la promotion.
-- **Notations standard :** Génération et lecture des notations PGN et FEN.
-- **Gestion des parties :** Suivi de l'historique des coups, annulation et restauration de mouvements, export/import de parties.
-- **Personnalisation :** Apparence, gestion des événements et règles configurables.
-- **Conception modulaire :** Architecture modulaire pour faciliter l'extension et l'intégration.
+- **Échiquier interactif :**
+  - Création d'un échiquier complet avec gestion des pièces, surbrillances dynamiques et interactions utilisateur (glisser-déposer, highlights).
+  - Notifications visuelles pour les situations telles que l'échec, le mat et les mouvements invalides.
+- **Validation des règles :**
+  - Support étendu des règles du jeu d'échecs, incluant :
+    - Le roque (grand et petit).
+    - La prise en passant.
+    - Les promotions différées et directes.
+    - Vérification des positions pour échec et mat, pat, et répétition des positions.
+- **Notations standard :**
+  - Génération et lecture des notations PGN et FEN avec support des cas complexes.
+- **Analyse stratégique :**
+  - Intégration de tables d'évaluation pour chaque type de pièce afin d'améliorer l'analyse positionnelle.
+  - Calculs dynamiques des scores de position et de matériel.
+- **Gestion des parties :**
+  - Suivi détaillé de l'historique des coups avec annulation et restauration.
+  - Import/export des parties via les notations PGN et FEN.
+- **Personnalisation :**
+  - Apparence configurable, gestion des événements et règles personnalisables.
+- **Conception modulaire :**
+  - Architecture modulaire facilitant l'extension et l'intégration.
 
 ---
 
@@ -31,7 +46,7 @@ git clone https://github.com/votre-utilisateur/checkmat.js.git
 ```
 
 ### 2. Inclusion dans le projet
-Ajoutez les fichiers nécessaires à votre projet web. checkmat.js dépend de jQuery pour certaines fonctionnalités interactives :
+Ajoutez les fichiers nécessaires à votre projet web. checkmat.js dépend de jQuery pour certaines fonctionnalités interactives :
 
 ```html
 <!-- Inclure les fichiers de CheckMat.js -->
@@ -41,7 +56,7 @@ Ajoutez les fichiers nécessaires à votre projet web. checkmat.js dépend de jQ
 
 ### 3. Styles personnalisés
 
-Le fichier CSS `checkmate.css` personnalise l'apparence du module 
+Le fichier CSS `checkmat.css` personnalise l'apparence du module.
 
 ### 4. Dépendances
 
@@ -51,18 +66,32 @@ Le fichier CSS `checkmate.css` personnalise l'apparence du module
 
 ---
 
-## Utilisation
+## **Utilisation**
 
-1. Intégrez un élément HTML pour le champ de saisie.
+1. Ajoutez un conteneur HTML pour l'échiquier :
    ```html
    <div id="checkmatContainer"></div>
    ```
 2. Initialisez le plugin avec jQuery :
    ```javascript
-    $(document).ready(function() {
-        $('#checkmatContainer').checkmatBuilder({});
-    });
+   $(document).ready(function() {
+       $('#checkmatContainer').checkmatBuilder({});
+   });
    ```
+
+---
+
+## **Changelog**
+
+### **v0.0.2**
+- **Ajout :** 
+  - `evaluation-engine.js` pour l'analyse positionnelle avancée.
+- **Améliorations majeures :**
+  - Gestion des promotions différées et directes.
+  - Suivi détaillé des positions pour éviter les répétitions.
+  - Génération enrichie de notations FEN et PGN.
+  - Notifications visuelles pour les échecs et les mats.
+- **Corrections et optimisations diverses.**
 
 ---
 
@@ -71,4 +100,3 @@ Le fichier CSS `checkmate.css` personnalise l'apparence du module
 Ce projet est sous licence MIT. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.
 
 ---
-
