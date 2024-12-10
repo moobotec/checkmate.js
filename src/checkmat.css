@@ -15,10 +15,21 @@ body {
     height: 400px; /* Hauteur fixe */
     overflow-y: auto; /* Ajoute un scroll vertical si nécessaire */
 }
+
 .row {
     display: flex;
 }
+
 .col-md-6 {
+    flex: 1;
+    margin: 10px;
+}
+
+.col-md-1 {
+    margin: 10px;
+}
+
+.col-md-5 {
     flex: 1;
     margin: 10px;
 }
@@ -140,4 +151,54 @@ body {
 .badge-progress span {
     position: relative;
     z-index: 1; /* Le texte reste au-dessus du remplissage */
+}
+
+#evaluationBar {
+    width: 10px;
+    height: 400px; /* Exemple de hauteur */
+    border: 1px solid black;
+    display: flex;
+    flex-direction: column; /* Empile verticalement */
+}
+
+#whiteBar,#whiteBarSquare,#whitePieceBar   {
+    background-color: white;
+    width: 100%;
+}
+
+#blackBar,#blackBarSquare,#blackPieceBar {
+    background-color: black;
+    width: 100%;
+}
+
+.piece {
+    margin: 0;
+    padding: 0;
+    cursor: grab;
+    z-index: 10; /* Pour les afficher au-dessus de l'échiquier */
+    user-select: none; /* Empêche la sélection de texte lors du drag */
+}
+
+#moveHistoryContainer {
+    height: 300px; /* Hauteur fixe */
+    overflow-y: auto; /* Barre de défilement verticale */
+    border: 1px solid #ccc; /* Optionnel : bordure pour démarquer */
+    padding: 5px; /* Espacement intérieur */
+    background-color: #f9f9f9; /* Couleur de fond */
+}
+
+#moveHistoryTable th {
+    position: sticky; /* Garde l'en-tête visible en cas de défilement */
+    top: 0;
+    background-color: #fff; /* Fond blanc pour l'en-tête */
+    z-index: 1;
+}
+
+.selected-cell {
+    background: linear-gradient(90deg, rgba(40, 167, 69, 0.3), rgba(40, 167, 69, 0.2));
+    transition: background 0.3s ease; /* Transition fluide pour l'effet */
+}
+
+.pointer-cell {
+    cursor: pointer; /* Change le curseur pour indiquer que la cellule est cliquable */
 }

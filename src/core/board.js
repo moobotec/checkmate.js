@@ -1,10 +1,11 @@
-import { Piece, PieceType, Color } from './piece.js';
+import { Piece, PieceType,ColorTypeTostring, UnicodeToLetter, Color } from './piece.js';
 import { Move, MoveType } from './move.js';
 import { Actions } from './actions-engine.js';
 import { Rules } from './rules-engine.js';
 import { Notations } from './notation-engine.js';
 import { Ui } from './ui-engine.js';
 import { Utils } from './utils.js';
+import { Evaluation } from './evaluation-engine.js';
 
 export class Board {
   constructor( onMove = null,initializeUI = true) {
@@ -17,6 +18,7 @@ export class Board {
     this.selectedPiece = null; // Pièce actuellement sélectionnée
     this.currentTurnColor = Color.BLANC;
     this.currentPgnNotation = null;
+    this.pgnNotation = null;
     this.movesHistory = null;
     this.fullMoveCount = 1;
     this.halfMoveCount = 0;
@@ -31,21 +33,33 @@ export class Board {
     this.positionHistory = [];
     this.halfMoveHistory = [];
     this.redoStack = [];
-    this.site = "checkmate.js";
+    this.event = 'Event checkmate.js';
+    this.site = 'checkmate.js';
+    this.date = `${new Date().toISOString().slice(0, 10)}`;
+    this.round = "-";
     this.playerB = Utils.generateRandomNames(1, 10)[0];
     this.playerN = Utils.generateRandomNames(1, 10)[0];
-
+    this.draggedPiece = null;
+    this.ghostPiece = null;
+    this.ghostPosition = null;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.currentCellIndex = 0;
+    
     if (initializeUI == true)
     {
       Ui.initializeBoardEventListeners(this);
       Ui.initializeBoutonBoardEventListeners(this);
     }
+
+    Evaluation.initEvaluationTables();
   }
 
   // Initialisation de l'échiquier avec les pièces de départ
   initBoard() {
     this.pieces = [];
     this.currentPgnNotation = [];
+    this.pgnNotation = [];
     this.movesHistory = [];
     this.fullMoveCount = 1;
     this.halfMoveCount = 0;
@@ -62,6 +76,12 @@ export class Board {
     this.positionHistory = [];
     this.halfMoveHistory = [];
     this.redoStack = [];
+    this.draggedPiece = null;
+    this.ghostPiece = null;
+    this.ghostPosition = null;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.currentCellIndex = 0;
 
     const sideBlanc = [
       PieceType.TOUR, PieceType.CHEVAL, PieceType.FOU,
@@ -82,7 +102,7 @@ export class Board {
     ];
 
     /*const sideNoir = [
-      PieceType.ROI, PieceType.REINE
+      PieceType.ROI,PieceType.REINE
     ];*/
 
     // Ajouter les pièces blanches
@@ -92,14 +112,14 @@ export class Board {
     });
 
     for (let i = 8; i < 16; i++) {
-      this.pieces.push(new Piece(PieceType.PION, i, Color.BLANC, i % 2 === 1 ? Color.BLANC : Color.NOIR));
+      this.pieces.push(new Piece(PieceType.PION, i, Color.BLANC, i % 2 === 0 ? Color.BLANC : Color.NOIR));
     }
 
     // Ajouter les pièces noires
     sideNoir.forEach((type, index) => {
       const position = 63 - index;
       if (type != null)
-        this.pieces.push(new Piece(type, position, Color.NOIR, position % 2 === 1 ? Color.BLANC : Color.NOIR));
+        this.pieces.push(new Piece(type, position, Color.NOIR, position % 2 === 0 ? Color.BLANC : Color.NOIR));
     });
 
     for (let i = 48; i < 56; i++) {
@@ -111,9 +131,12 @@ export class Board {
 
     if (this.onMove)
     {
+      const { score, positionScore, pieceScore  } = Evaluation.evaluate(this);
+
       const caseInfo = {
           fen: this.getNotationFen(Color.BLANC),
           pgn: '',
+          updatePgn: true,
           fullMoveCount : this.fullMoveCount,
           halfMoveCount  : this.halfMoveCount,
           hasWhiteCastlingRights: (this.castlingRights.includes('Q') || this.castlingRights.includes('K')),
@@ -121,9 +144,12 @@ export class Board {
           priseEnPassant : this.priseEnPassant,
           isCanRequestDraw : false,
           isDraw : false,
-          isCheckWhite :  false, 
+          isCheckWhite : false, 
           isCheckBlack : false, 
           isCheckmate : false,
+          score : score,
+          positionScore : positionScore,
+          pieceScore : pieceScore
       };
       this.onMove(caseInfo); // Exécuter la callback avec les infos de la case
     }
@@ -248,35 +274,33 @@ export class Board {
       };
   }
 
-  async actionPieceIfValidById(id, destination, type) {
-
-    console.log(id);
+  async actionPieceIfValidById(id, destination, type, promotedTo = null) {
 
     const piece = this.getPieceById(id);
     if (!piece) {
         throw new Error(`Aucune pièce trouvée avec l'id ${id}`);
     }
-    return await this.actionPieceIfValid(piece,destination,type);
+    return await this.actionPieceIfValid(piece,destination,type,promotedTo,false);
   }
 
-  async actionPieceIfValidByOrigin(origin, destination, type) {
+  async actionPieceIfValidByOrigin(origin, destination, type, promotedTo = null) {
 
     const piece = this.getPieceAt(origin);
     if (!piece) {
         throw new Error(`Aucune pièce trouvée à la position ${origin}`);
     }
-    return await this.actionPieceIfValid(piece,destination,type);
+    return await this.actionPieceIfValid(piece,destination,type,promotedTo,true);
   }
 
-  async actionPieceIfValid(piece, destination, type) {
+  async actionPieceIfValid(piece, destination, type, promotedTo = null, updatePgnNotation = true) {
   
-    const move = await Actions.performMove(this,piece,destination,type);
+    const move = await Actions.performMove(this,piece,destination,type,promotedTo);
 
     if (type != MoveType.CASTLING_K && type != MoveType.CASTLING_Q)
     {
       // Vérifier si le roi est en échec après ce déplacement
       const kingColor = piece.color;
-      const isInCheck = Rules.isKingInCheck(this,kingColor,true);
+      const isInCheck = Rules.isKingInCheck(this,kingColor);
 
       // Annuler le déplacement si le roi reste en échec
       if (isInCheck) {
@@ -311,10 +335,17 @@ export class Board {
 
     this.updateCastlingRights();
 
+    this.makeMoveHistory(move,updatePgnNotation);
+    this.movesHistory.push(move);
+
+    console.log('makeMoveHistory');
+
     const currentFen = this.getNotationFen(opponentColor);
+    const currentPgn = this.getMoveHistory();
+    const {score, positionScore, pieceScore} = Evaluation.evaluate(this);
 
     const movement = {
-        pgn : this.makeMoveHistory(move),
+        pgn : currentPgn,
         fen : currentFen,
         fullMoveCount : this.fullMoveCount,
         halfMoveCount  : this.halfMoveCount,
@@ -325,13 +356,35 @@ export class Board {
         isDraw :  move.isStalemate || move.isMaterialInsufficient || Rules.checkFivefoldRepetition(this,currentFen) ,
         isCheck : move.isCheck,
         isCheckmate : move.isCheckmate,
+        score : score,
+        positionScore : positionScore,
+        pieceScore : pieceScore,
     };
     
-    this.movesHistory.push(move);
     this.currentTurnColor = opponentColor ;
 
     return movement;
   }
+
+  async setMoveByIndexTable(index) {
+    let mouvement = null;
+    let count = Math.abs(this.currentCellIndex - index);
+    if (this.currentCellIndex < index)
+    {
+        while (count > 0) {
+            mouvement = await this.redoLastMove();
+            count--;
+        }
+    }
+    else if (this.currentCellIndex > index)
+    {
+        while (count > 0) {
+            mouvement = this.undoLastMove();
+            count--;
+        }
+    }
+    return mouvement;
+}
 
   async restoreLastPosition() {
       if (this.redoStack.length === 0) {
@@ -353,9 +406,10 @@ export class Board {
       // Extraire les informations du mouvement
       const destination = moveToRedo.destination;
       const type = moveToRedo.type;
+      const promotedTo = (moveToRedo.promotedTo !== null)? this._getPieceTypeFromFEN(moveToRedo.promotedTo.toLowerCase()) : null;
       let mouvement = null;
       try {
-          mouvement = await this.actionPieceIfValidById(moveToRedo.pieceId, destination, type);
+          mouvement = await this.actionPieceIfValidById(moveToRedo.pieceId, destination, type, promotedTo , false);
       } catch (error) {
           // Si une erreur se produit, remettre le mouvement dans la pile redo
           this.redoStack.push(moveToRedo);
@@ -406,25 +460,19 @@ export class Board {
       // Revenir au tour précédent
       const opponentColor = this.currentTurnColor === Color.BLANC ? Color.NOIR : Color.BLANC;
 
-      /***********/
-      //TODO : ajouter le cas du retour à le prise en passant
-      /***********/
-      const state = Rules.stateBoard(this);
-
-      lastMove.isCheck = state.isCheck;
-      lastMove.isCheckmate = state.isCheckmate;
-      lastMove.isStalemate =  state.isStalemate;
-      lastMove.isMaterialInsufficient =  state.isMaterialInsufficient;
-
       this.redoStack.push(lastMove); // Ajouter le mouvement annulé à redoStack
     
+      this.removeMoveHistory();
+
       console.log(lastMove.getMoveSummary());
 
       this.updateCastlingRights();
-
-      const currentPgn = this.removeMoveHistory();
-      const currentFen = this.getLastPositionHistory();
   
+      const currentPgn = this.getMoveHistory();
+      const currentFen = this.getLastPositionHistory();
+      const { score, positionScore, pieceScore  } = Evaluation.evaluate(this);
+      const state = Rules.stateBoard(this);
+
       const movement = {
           pgn : currentPgn,
           fen : currentFen,
@@ -434,15 +482,16 @@ export class Board {
           hasBlackCastlingRights: (this.castlingRights.includes('q') || this.castlingRights.includes('k')),
           priseEnPassant : this.priseEnPassant,
           isCanRequestDraw : Rules.checkFiftyMoveRule(this) || Rules.checkThreefoldRepetition(this,currentFen) ,
-          isDraw :  lastMove.isStalemate || lastMove.isMaterialInsufficient || Rules.checkFivefoldRepetition(this,currentFen) ,
-          isCheck : lastMove.isCheck,
-          isCheckmate : lastMove.isCheckmate,
+          isDraw :  state.isStalemate || state.isMaterialInsufficient || Rules.checkFivefoldRepetition(this,currentFen) ,
+          isCheck : state.isCheck,
+          isCheckmate : state.isCheckmate,
+          score : score,
+          positionScore : positionScore,
+          pieceScore : pieceScore,
       };
       
       this.currentTurnColor = opponentColor ;
-  
       return movement;
-
   }
 
   updateBoardDisplay() {
@@ -498,7 +547,7 @@ export class Board {
     return this.currentPgnNotation.join('\n'); // Historique complet
   }
 
-  makeMoveHistory(move) 
+  makeMoveHistory(move,updatePgnNotation = true) 
   {
     if (typeof move === 'undefined' || move === null || !(move instanceof Move))
       return;
@@ -514,9 +563,17 @@ export class Board {
         this.fullMoveCount++; // Incrémenter après le coup des noirs
     }
 
+    if( updatePgnNotation )
+        this.pgnNotation = this.currentPgnNotation.slice();
+
     return this.currentPgnNotation.join('\n'); // Historique complet
   }
- 
+
+  getMoveHistory() 
+  {
+    return this.pgnNotation.join('\n'); // Historique complet
+  }
+
   downloadPGN() {
     if (!this.currentPgnNotation || this.currentPgnNotation.length === 0) {
         console.warn("Aucune notation PGN disponible pour téléchargement.");
@@ -526,9 +583,9 @@ export class Board {
     // Déterminer le résultat de la partie
     let result = "*"; // Par défaut : partie incomplète
 
-    if (this.isKingCheckmate(Color.NOIR)) {
+    if (Rules.isKingCheckmate(this,Color.NOIR)) {
         result = "1-0"; // Victoire des Blancs
-    } else if (this.isKingCheckmate(Color.BLANC)) {
+    } else if (Rules.isKingCheckmate(this,Color.BLANC)) {
         result = "0-1"; // Victoire des Noirs
     } else if (Rules.isStalemate(this, Color.BLANC) || Rules.isStalemate(this, Color.NOIR)) {
         result = "1/2-1/2"; // Match nul (pat)
@@ -537,30 +594,44 @@ export class Board {
     }
 
         // Générer le contenu PGN complet
-        const header = `[Event "checkmate.js"]
-    [Site "${this.site}"]
-    [Date "${new Date().toISOString().slice(0, 10)}"]
-    [Round "-"]
-    [White "${this.playerB}"]
-    [Black "${this.playerN}"]
-    [Result "${result}"]
+    const header = `[Event "${this.event}"]\n[Site "${this.site}"]\n[Date "${this.date}"]\n[Round "${this.round}"]\n[White "${this.playerB}"]\n[Black "${this.playerN}"]\n[Result "${result}"]\n`; 
+    
+    // Fonction pour remplacer les caractères Unicode par des lettres
+    const replaceUnicodeWithLetters = (notation, mapping) => {
+        return notation.map(move => {
+            let updatedMove = move;
+            for (const [unicode, letter] of Object.entries(mapping)) {
+                updatedMove = updatedMove.replace(new RegExp(unicode, 'g'), letter.toUpperCase());
+            }
+            return updatedMove;
+        });
+    };
 
-    `; // Remplacez les champs si besoin (White, Black, Result, etc.)
-        const pgnContent = `${header}${this.currentPgnNotation.join(' ')}`;
+    const updatedPgnNotation = replaceUnicodeWithLetters(this.currentPgnNotation, UnicodeToLetter);
 
-        // Créer un fichier Blob contenant la notation PGN
-        const blob = new Blob([pgnContent], { type: 'text/plain' });
+    const formattedPgn = updatedPgnNotation.reduce((acc, move, index) => {
+        if ((index + 1) % 6 === 0) {
+            // Ajout d'un saut de ligne sans espace
+            return acc + move + '\n';
+        }
+        return acc + move + ' ';
+    }, '');
 
-        // Créer un lien de téléchargement
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'chess_game.pgn'; // Nom du fichier
+    const pgnContent = `${header}${formattedPgn.trim()}`;
 
-        // Simuler un clic sur le lien pour déclencher le téléchargement
-        link.click();
+    // Créer un fichier Blob contenant la notation PGN
+    const blob = new Blob([pgnContent], { type: 'text/plain' });
 
-        // Libérer l'URL de l'objet après utilisation
-        URL.revokeObjectURL(link.href);
+    // Créer un lien de téléchargement
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'chess_game.pgn'; // Nom du fichier
+
+    // Simuler un clic sur le lien pour déclencher le téléchargement
+    link.click();
+
+    // Libérer l'URL de l'objet après utilisation
+    URL.revokeObjectURL(link.href);
   }
 
   incrementHalfMove(type, isCapturePiece) {
@@ -684,7 +755,7 @@ export class Board {
               // Vérifier si le mouvement est valide
               if (Rules.isValidMove(this,piecePosition, destination)) {
                   Actions.simulateMove(this,piece, destination, destination , () => {
-                      if (!Rules.isKingInCheck(this, kingColor,true)) {
+                      if (!Rules.isKingInCheck(this, kingColor)) {
                           possibleMoves.push(destination); // Ajouter le mouvement valide
                       }
                   });
@@ -699,18 +770,47 @@ export class Board {
       if (this.priseEnPassant !== '-' && this.priseEnPassantPieces !== null) {
           const capturePosition = this.priseEnPassantPieces.capturePosition;
           Actions.simulateMove(this,piece, capturePosition, this.priseEnPassantPieces.targetPawn.position , () => {
-            if (!Rules.isKingInCheck(this, kingColor,true)) {
+            if (!Rules.isKingInCheck(this, kingColor)) {
                 possibleMoves.push(capturePosition); // Ajouter le mouvement valide
             }
           });
       }
       return possibleMoves;
   }
-  async handleSquareClick(index) {
+    // Méthode auxiliaire pour obtenir les cases adjacentes
+  _getAdjacentSquares(position) {
+        const adjacentSquares = [];
+        const row = Math.floor(position / 8);
+        const col = position % 8;
+
+        // Parcourir les cases adjacentes
+        for (let dRow = -1; dRow <= 1; dRow++) {
+            for (let dCol = -1; dCol <= 1; dCol++) {
+                if (dRow === 0 && dCol === 0) continue; // Ignorer la case actuelle
+                const newRow = row + dRow;
+                const newCol = col + dCol;
+
+                // Vérifier si la case est dans les limites de l'échiquier
+                if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                    adjacentSquares.push(newRow * 8 + newCol);
+                }
+            }
+        }
+
+        return adjacentSquares;
+  }
+
+  async handleSquareClick(index,reset = false) {
       try {
+
+          if (reset == true && this.selectedPiece)
+          {
+            this.resetSelection();
+          }
+
           const piece = this.getPieceAt(index);
   
-          if (piece && piece.color === this.currentTurnColor) {
+          if (this._checkColorPiece(piece)) {
             // Vérifiez si une autre pièce est déjà sélectionnée
             if (this.selectedPiece && this.selectedPiece.piece.id != piece.id) {
                 // Si la même pièce est cliquée, réinitialisez la sélection
@@ -733,19 +833,26 @@ export class Board {
           return null;
       }
   }
+  checkColorPieceByIndex(index) {
+    const piece = this.getPieceAt(index);
+    return this._checkColorPiece(piece);
+  }
+  _checkColorPiece(piece) {
+    return (piece && piece.color === this.currentTurnColor);
+  }
   resetSelection() {
       this.selectedPiece = null;
       Ui.clearSelectedSquareHighlight();
       Ui.clearHighlightedMoves();
   }
   selectPiece(piece, index) {
-      if (piece && piece.color === this.currentTurnColor) {
+      if (this._checkColorPiece(piece)) {
           this.resetSelection(); // Réinitialiser l'état visuel
           this.selectedPiece = { piece, index };
           Ui.highlightSelectedSquare(index);
 
           const possibleMoves = this.getPossibleMoves(index);
-          Ui.highlightPossibleMoves(this, possibleMoves);
+          Ui.highlightPossibleMoves(possibleMoves);
       } else {
           this.resetSelection();
       }
@@ -812,8 +919,193 @@ export class Board {
 
       // Méthode existante pour appliquer la position FEN à l'échiquier
       this.applyFEN(fen); // Assurez-vous que `applyFEN` existe dans la classe `Board`
+
       this.updateBoardDisplay();
+
       console.log("Position FEN chargée :", fen);
+  }
+
+  applyFEN(fen) {
+    if (!fen) {
+        throw new Error("La chaîne FEN est vide ou invalide.");
+    }
+
+    const parts = fen.split(' ');
+
+    if (parts.length < 4 || parts.length > 6) {
+        throw new Error("La chaîne FEN est mal formée.");
+    }
+
+    const [position, turn, castling, enPassant, halfMove = 0, fullMove = 1] = parts;
+
+    this.initBoard();
+
+    this.grid.fill(null);
+    this.pieces.forEach(piece => {
+        piece.isActive = false; // Désactiver toutes les pièces
+    });
+    this.capturedPieces = {
+        white: [],
+        black: []
+    };
+
+    this.halfMoveCount = parseInt(halfMove, 10);
+    this.fullMoveCount = parseInt(fullMove, 10);
+    this.currentTurnColor = turn === 'w' ? Color.BLANC : Color.NOIR;
+    this.castlingRights = castling;
+    this.priseEnPassant = enPassant;
+    this.priseEnPassantPieces = this._findEnPassantPiece(enPassant);
+
+    // 2. Placer les pièces sur l'échiquier
+    let squareIndex = 0; // Commence par la rangée 0 (Blancs en bas)
+
+    const rows = position.split('/'); // Diviser par rangées
+    if (rows.length !== 8) {
+        throw new Error("La description de l'échiquier dans la FEN est incorrecte.");
+    }
+
+    for (const row of rows.reverse()) { // Traiter les rangées de bas en haut
+        for (const char of row) {
+            if (!isNaN(parseInt(char, 10))) {
+                squareIndex += parseInt(char, 10); // Cases vides
+            } else {
+                const color = char === char.toUpperCase() ? Color.BLANC : Color.NOIR;
+                const type = this._getPieceTypeFromFEN(char.toLowerCase());
+
+                if (type === null || type === undefined) {
+                    throw new Error(`Type de pièce invalide dans FEN : ${char}`);
+                }
+
+                if (type === -1) {
+                    throw new Error(`Type de pièce invalide dans FEN : ${pion}`);
+                }
+
+                // Vérifier si une pièce correspondante existe déjà
+                let piece = this.pieces.find(p => p.type === type && p.color === color && !p.isActive);
+                if (!piece) {
+                    // Créer une nouvelle pièce si aucune pièce inactive n'est disponible
+                    piece = new Piece(
+                        type,
+                        squareIndex,
+                        color,
+                        (squareIndex + Math.floor(squareIndex / 8)) % 2 === 0 ? Color.BLANC : Color.NOIR
+                    );
+                    this.pieces.push(piece);
+                }
+
+                // Activer la pièce et la placer sur l'échiquier
+                piece.isActive = true;
+                piece.movesCount = 1;
+                piece.position = squareIndex;
+
+                squareIndex++;
+            }
+        }
+        if (squareIndex % 8 !== 0) {
+            throw new Error("La description de l'échiquier dans la FEN est incorrecte (trop de colonnes).");
+        }
+    }
+
+    this.pieces.forEach(piece => {
+        if (!piece.isActive) {
+            this.capturedPieces[ColorTypeTostring[piece.color]].push(piece);
+        }
+    });
+
+    const validCastling = /^[KQkq]+$|^-$/;
+    if (!validCastling.test(castling)) {
+        throw new Error("Les droits de roque dans FEN sont mal formés.");
+    }
+
+    if (this.priseEnPassant !== '-' && ( !/^[a-h][36]$/.test(this.priseEnPassant) || this.priseEnPassantPieces == null ) ) {
+        throw new Error("La prise en passant dans FEN est mal formée.");
+    }
+
+    this.updateGrid();
+
+    if (this.onMove)
+    {
+        const currentFen = this.getNotationFen(this.currentTurnColor);
+        const { score, positionScore, pieceScore  } = Evaluation.evaluate(this);
+        const state = Rules.stateBoard(this);
+    
+        const caseInfo = {
+            fen: currentFen,
+            pgn: '',
+            updatePgn: true,
+            fullMoveCount : this.fullMoveCount,
+            halfMoveCount  : this.halfMoveCount,
+            hasWhiteCastlingRights: (this.castlingRights.includes('Q') || this.castlingRights.includes('K')),
+            hasBlackCastlingRights: (this.castlingRights.includes('q') || this.castlingRights.includes('k')),
+            priseEnPassant : this.priseEnPassant,
+            isCanRequestDraw : Rules.checkFiftyMoveRule(this) || Rules.checkThreefoldRepetition(this,currentFen) ,
+            isDraw :  state.isStalemate || state.isMaterialInsufficient || Rules.checkFivefoldRepetition(this,currentFen) ,
+            isCheckWhite : ( this.currentTurnColor == Color.BLANC ) ? state.isCheck : false, 
+            isCheckBlack : ( this.currentTurnColor == Color.NOIR ) ? state.isCheck : false, 
+            isCheckmate : state.isCheckmate,
+            score : score,
+            positionScore : positionScore,
+            pieceScore : pieceScore
+        };
+        this.onMove(caseInfo); // Exécuter la callback avec les infos de la case
+    }
+  }
+
+  _findEnPassantPiece(enPassant) {
+    if (enPassant === "-") {
+        return null; // Pas de position de prise en passant
+    }
+
+    // Convertir la position en index de grille
+    const file = enPassant.charCodeAt(0) - 'a'.charCodeAt(0); // Colonne (a-h -> 0-7)
+    const rank = parseInt(enPassant.charAt(1), 10) - 1; // Ligne (1-8 -> 0-7)
+    const enPassantIndex = rank * 8 + file;
+
+    // Déterminer la direction en fonction de la couleur au trait
+    const direction = this.currentTurnColor === Color.BLANC ? -1 : 1;
+
+    // La position du pion potentiel à capturer
+    const capturingPionPosition = enPassantIndex + (8 * direction);
+
+    // Vérifier si une pièce valide est présente à cette position
+    const piece = this.getPieceAt(capturingPionPosition);
+
+    if (piece && piece.type === PieceType.PION && piece.color !== this.currentTurnColor) {
+        return piece; // Le pion peut être capturé en passant
+    }
+
+    return null; // Aucun pion ne peut être capturé en passant
+  }
+
+  _getPieceTypeFromFEN(pion) {
+    const map = {
+        'p': PieceType.PION,
+        'r': PieceType.TOUR,
+        'n': PieceType.CHEVAL,
+        'b': PieceType.FOU,
+        'q': PieceType.REINE,
+        'k': PieceType.ROI
+    };
+    return map[pion] ?? -1;
+  }
+
+  getTotalMovesCount() {
+    if (!Array.isArray(this.pgnNotation) || this.pgnNotation.length === 0) {
+        return 0; // Si la notation est vide ou invalide, retourne 0
+    }
+
+    let totalMoves = 0;
+
+    // Parcourir chaque ligne de notation PGN
+    this.pgnNotation.forEach(line => {
+        // Diviser la ligne en éléments, en ignorant le numéro du tour (par exemple, "1.", "2.")
+        const moves = line.split(' ').filter(item => !item.includes('.'));
+
+        // Ajouter le nombre de coups de la ligne au total
+        totalMoves += moves.length;
+    });
+
+    return totalMoves;
   }
 
   /**
@@ -829,7 +1121,19 @@ export class Board {
       // Méthode existante pour appliquer le PGN à l'échiquier
       const contentPgn = Notations.parsePGN(pgn); // Parse les mouvements à partir du PGN
      
+      this.playerB = contentPgn.metadata.White;
+      this.playerN  = contentPgn.metadata.Black;
+      this.event = contentPgn.metadata.Event;
+      this.site = contentPgn.metadata.Site;
+      this.date = contentPgn.metadata.Date;
+      this.round = contentPgn.metadata.Round;
+
+      $('#nameUserWhite').html(this.playerB);
+      $('#nameUserBlack').html(this.playerN);
+
       await this.initializeBoardFromMoves(contentPgn.moves);
+
+      Ui.navigateHistoryTable(this,this.getTotalMovesCount());
 
       console.log(contentPgn);
 
@@ -857,9 +1161,13 @@ export class Board {
   
           if (movement) {
               if (this.onMove) {
+
+                  const { score, positionScore, pieceScore  } = Evaluation.evaluate(this);
+
                   const caseInfo = {
                       fen: movement.fen,
                       pgn: movement.pgn,
+                      updatePgn: true,
                       fullMoveCount : movement.fullMoveCount, 
                       halfMoveCount  : movement.halfMoveCount, 
                       hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
@@ -869,7 +1177,10 @@ export class Board {
                       isDraw : movement.isDraw, 
                       isCheckWhite : ( this.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
                       isCheckBlack : ( this.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
-                      isCheckmate : movement.isCheckmate
+                      isCheckmate : movement.isCheckmate,
+                      score : score,
+                      positionScore : positionScore,
+                      pieceScore : pieceScore,
                   };
                   this.onMove(caseInfo); // Exécuter la callback avec les infos de la case
               }
@@ -902,8 +1213,6 @@ export class Board {
           return { origin: kingPosition, destination, type: MoveType.CASTLING_Q };
       }
   
-      const isCheckmate = move.includes("#");
-      const isCheck = !isCheckmate && move.includes("+");
       const cleanedMove = move.replace(/[+#]/g, ""); // Supprimer les symboles '+' et '#' pour le traitement
 
       // Identifier si le mouvement met en échec et nettoyer le mouvement
@@ -1011,15 +1320,6 @@ export class Board {
 
     const isColumn = /^[a-h]$/.test(disambiguate); // Vérifier si c'est une colonne
     const isRow = /^[1-8]$/.test(disambiguate); // Vérifier si c'est une ligne
-
-    const colHint = disambiguate.match(/[a-h]/); // Indice de colonne
-    const rowHint = disambiguate.match(/[1-8]/); // Indice de ligne
-
-    console.log(move);
-
-    console.log(isColumn,isRow);
-    console.log(colHint,rowHint);
-    console.log(possiblePieces);
 
     const filteredPieces = possiblePieces.filter((p) => {
         if (isColumn) {

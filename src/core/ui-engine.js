@@ -1,9 +1,10 @@
 import { PieceType, Color, UnicodePieces, PieceTypeToString } from './piece.js';
+import { Utils } from './utils.js';
 
 // Module Ui
 export const Ui = {
 
-    highlightPossibleMoves(board, moves) {
+    highlightPossibleMoves(moves) {
         const cells = document.querySelectorAll('#boardContainer table td'); // Toutes les cellules avec `data-position`
     
         moves.forEach(move => {
@@ -130,6 +131,7 @@ export const Ui = {
     
         // Gestionnaire pour les clics
         boardContainer.addEventListener('click', async (event) => {
+
             const cell = event.target.closest('td'); // Récupérer la cellule cliquée
             if (!cell || !cell.dataset.position) return; // Ignorer si ce n'est pas une cellule valide
     
@@ -140,6 +142,7 @@ export const Ui = {
                     const caseInfo = {
                         fen: movement.fen,
                         pgn: movement.pgn,
+                        updatePgn: true,
                         fullMoveCount : movement.fullMoveCount, 
                         halfMoveCount  : movement.halfMoveCount, 
                         hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
@@ -149,10 +152,19 @@ export const Ui = {
                         isDraw : movement.isDraw, 
                         isCheckWhite : ( board.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
                         isCheckBlack : ( board.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
-                        isCheckmate : movement.isCheckmate
+                        isCheckmate : movement.isCheckmate,
+                        score : movement.score,
+                        positionScore : movement.positionScore,
+                        pieceScore : movement.pieceScore
                     };
                     board.onMove(caseInfo); // Exécuter la callback avec les infos de la case
+
+                    Ui.navigateHistoryTable(board,board.getTotalMovesCount());
                 }
+
+                board.redoStack = [];
+
+                Ui.updateButtonStates(board);
             }
         });
     
@@ -171,12 +183,125 @@ export const Ui = {
     
             cell.style.boxShadow = 'none'; // Supprimer la surbrillance
         });
+
+        // Étape 2 : Déplacer la pièce (mousemove)
+        document.addEventListener("mousemove", async (event) => {
+            if (!board.draggedPiece) return;
+
+            if (board.ghostPosition != null)
+            {
+                // Créer une copie temporaire (ghostPiece)
+                board.ghostPiece = board.draggedPiece.cloneNode(true);
+                board.ghostPiece.style.position = "fixed";
+                board.ghostPiece.style.pointerEvents = "none";
+                board.ghostPiece.style.zIndex = "1000"; // Toujours au-dessus
+                board.ghostPiece.style.width = `${board.draggedPiece.offsetWidth}px`;
+                board.ghostPiece.style.height = `${board.draggedPiece.offsetHeight}px`;
+                board.ghostPiece.style.fontSize = '24px';
+                document.body.appendChild(board.ghostPiece);
+
+                // Masquer la pièce d'origine
+                board.draggedPiece.style.opacity = "0";
+        
+                // Suivre la souris avec la pièce temporaire
+                board.ghostPiece.style.left = `${event.clientX - board.ghostPiece.offsetWidth / 2}px`;
+                board.ghostPiece.style.top = `${event.clientY - board.ghostPiece.offsetHeight / 2}px`;
+
+                board.ghostPosition = null;
+            }
+
+            // Mettre à jour la position de la copie temporaire
+            board.ghostPiece.style.left = `${event.clientX - board.ghostPiece.offsetWidth / 2}px`;
+            board.ghostPiece.style.top = `${event.clientY - board.ghostPiece.offsetHeight / 2}px`;
+        });
+        // Étape 1 : Attraper la pièce (mousedown)
+        boardContainer.addEventListener("mousedown", async (event) => {
+
+            const cell = event.target.closest('td'); // Récupérer la cellule cliquée
+            if (!cell || !cell.dataset.position) return; // Ignorer si ce n'est pas une cellule valide
+    
+            board.ghostPosition = parseInt(cell.dataset.position, 10); // Récupérer l'attribut `data-position`
+          
+            const target = event.target.closest(".piece");
+            if (!target) return;
+
+            if ( board.checkColorPieceByIndex(board.ghostPosition) )
+            {
+                board.draggedPiece = target;
+                await board.handleSquareClick(board.ghostPosition,true); // Appel logique à votre gestionnaire de clics
+            }
+    
+        });
+
+        // Étape 3 : Relâcher la pièce (mouseup)
+        document.addEventListener("mouseup", async (event) => {
+
+            if (!board.draggedPiece) return;
+          
+            // Obtenir la case cible sous la souris
+            const targetCell = document.elementFromPoint(event.clientX, event.clientY)?.closest("td");
+
+            if (targetCell && targetCell.dataset.position) {
+                // Déplacer la pièce vers la nouvelle case
+                const targetPosition = parseInt(targetCell.dataset.position, 10);
+
+                const movement = await board.handleSquareClick(targetPosition); // Appel logique à votre gestionnaire de clics
+                if (movement) {
+                    if (board.onMove) {
+                        const caseInfo = {
+                            fen: movement.fen,
+                            pgn: movement.pgn,
+                            updatePgn: true,
+                            fullMoveCount : movement.fullMoveCount, 
+                            halfMoveCount  : movement.halfMoveCount, 
+                            hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
+                            hasBlackCastlingRights: movement.hasBlackCastlingRights, 
+                            priseEnPassant : movement.priseEnPassant, 
+                            isCanRequestDraw : movement.isCanRequestDraw, 
+                            isDraw : movement.isDraw, 
+                            isCheckWhite : ( board.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
+                            isCheckBlack : ( board.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
+                            isCheckmate : movement.isCheckmate,
+                            score : movement.score,
+                            positionScore : movement.positionScore,
+                            pieceScore : movement.pieceScore
+                        };
+                        board.onMove(caseInfo); // Exécuter la callback avec les infos de la case
+
+                        Ui.navigateHistoryTable(board,board.getTotalMovesCount());
+                    }
+
+                    board.redoStack = [];
+
+                    Ui.updateButtonStates(board);
+                }
+            }
+
+            // Nettoyer : supprimer la copie temporaire et restaurer la pièce d'origine
+            if (board.ghostPiece != null )
+            {
+                board.ghostPiece.remove();
+                board.ghostPiece = null;
+            }
+            board.draggedPiece.style.opacity = "1";
+            board.draggedPiece = null;
+        });
+
     },
     initializeBoutonBoardEventListeners(board) {
 
         window.turnBoardHandler = function () {
             board.orientationBoard = (board.orientationBoard === Color.BLANC) ? Color.NOIR : Color.BLANC;
             board.updateBoardDisplay();
+
+            Ui.inverseBarAndValues(board,'whiteBar', 'blackBar', 'evaluationValueB', 'evaluationValueN');
+            
+            // Mise à jour des barres et valeurs pour le score des pièces
+            Ui.inverseBarAndValues(board,'whitePieceBar', 'blackPieceBar', 'evaluationPieceValueB', 'evaluationPieceValueN');
+        
+            // Mise à jour des barres et valeurs pour le score de position
+            Ui.inverseBarAndValues(board,'whiteBarSquare', 'blackBarSquare', 'evaluationSquareValueB', 'evaluationSquareValueN');
+
         };
 
         window.loadGameHandler = function () {
@@ -193,8 +318,20 @@ export const Ui = {
         };
         
         window.resetGameHandler = function () {
+
             board.initBoard();
+
+            board.event = 'Event checkmate.js';
+            board.site = 'checkmate.js';
+            board.date = `${new Date().toISOString().slice(0, 10)}`;
+            board.round = "-";
+            board.playerB = Utils.generateRandomNames(1, 10)[0];
+            board.playerN = Utils.generateRandomNames(1, 10)[0];
+
             board.updateBoardDisplay();
+
+            $('#nameUserWhite').html(board.playerB);
+            $('#nameUserBlack').html(board.playerN);
         };
 
         window.resetMoveHandler = function ()  {
@@ -210,6 +347,7 @@ export const Ui = {
                     const caseInfo = {
                         fen: movement.fen,
                         pgn: movement.pgn,
+                        updatePgn: false,
                         fullMoveCount : movement.fullMoveCount, 
                         halfMoveCount  : movement.halfMoveCount, 
                         hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
@@ -219,10 +357,15 @@ export const Ui = {
                         isDraw : movement.isDraw, 
                         isCheckWhite : ( board.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
                         isCheckBlack : ( board.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
-                        isCheckmate : movement.isCheckmate
+                        isCheckmate : movement.isCheckmate,
+                        score : movement.score,
+                        positionScore : movement.positionScore,
+                        pieceScore : movement.pieceScore
                     };
                     board.onMove(caseInfo); // Exécuter la callback avec les infos de la case
-                }
+
+                    Ui.navigateHistoryTable(board,0);
+                } 
             }
 
         };
@@ -240,6 +383,7 @@ export const Ui = {
                     const caseInfo = {
                         fen: movement.fen,
                         pgn: movement.pgn,
+                        updatePgn: false,
                         fullMoveCount : movement.fullMoveCount, 
                         halfMoveCount  : movement.halfMoveCount, 
                         hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
@@ -249,9 +393,14 @@ export const Ui = {
                         isDraw : movement.isDraw, 
                         isCheckWhite : ( board.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
                         isCheckBlack : ( board.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
-                        isCheckmate : movement.isCheckmate
+                        isCheckmate : movement.isCheckmate,
+                        score : movement.score,
+                        positionScore : movement.positionScore,
+                        pieceScore : movement.pieceScore
                     };
                     board.onMove(caseInfo); // Exécuter la callback avec les infos de la case
+
+                    Ui.navigateHistoryTable(board,board.getTotalMovesCount());
                 }
             }
 
@@ -270,6 +419,7 @@ export const Ui = {
                     const caseInfo = {
                         fen: movement.fen,
                         pgn: movement.pgn,
+                        updatePgn: false,
                         fullMoveCount : movement.fullMoveCount, 
                         halfMoveCount  : movement.halfMoveCount, 
                         hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
@@ -279,9 +429,14 @@ export const Ui = {
                         isDraw : movement.isDraw, 
                         isCheckWhite : ( board.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
                         isCheckBlack : ( board.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
-                        isCheckmate : movement.isCheckmate
+                        isCheckmate : movement.isCheckmate,
+                        score : movement.score,
+                        positionScore : movement.positionScore,
+                        pieceScore : movement.pieceScore
                     };
                     board.onMove(caseInfo); // Exécuter la callback avec les infos de la case
+
+                    Ui.navigateHistoryTable(board,board.currentCellIndex + 1);
                 }
             }
         };
@@ -299,6 +454,7 @@ export const Ui = {
                     const caseInfo = {
                         fen: movement.fen,
                         pgn: movement.pgn,
+                        updatePgn: false,
                         fullMoveCount : movement.fullMoveCount, 
                         halfMoveCount  : movement.halfMoveCount, 
                         hasWhiteCastlingRights: movement.hasWhiteCastlingRights, 
@@ -308,9 +464,14 @@ export const Ui = {
                         isDraw : movement.isDraw, 
                         isCheckWhite : ( board.currentTurnColor == Color.BLANC ) ? movement.isCheck : false, 
                         isCheckBlack : ( board.currentTurnColor == Color.NOIR ) ? movement.isCheck : false, 
-                        isCheckmate : movement.isCheckmate
+                        isCheckmate : movement.isCheckmate,
+                        score : movement.score,
+                        positionScore : movement.positionScore,
+                        pieceScore : movement.pieceScore
                     };
                     board.onMove(caseInfo); // Exécuter la callback avec les infos de la case
+
+                    Ui.navigateHistoryTable(board,board.currentCellIndex - 1);
                 }
             }
         };
@@ -438,7 +599,17 @@ export const Ui = {
                 const piece = board.getPieceAt(index);
                 if (!board.isNumberBoard)
                 {
-                  td.textContent = piece ? piece.getUnicode() : '';
+                  //<div class="piece" data-position="0" style="top: 0px; left: 0px;"></div>
+                  const container = document.createElement('div');
+                  container.classList.add('piece');
+                  container.style.top = '0px';
+                  container.style.left = '0px';
+
+                  const pieceElement = document.createElement('div');
+                  pieceElement.innerHTML = piece ? piece.getUnicode() : '&nbsp;';
+                  container.appendChild(pieceElement);
+
+                  td.appendChild(container);
                 }
                 else
                 {
@@ -454,7 +625,7 @@ export const Ui = {
     
                   // Ajouter la pièce (ou laisser vide si aucune pièce n'est présente)
                   const pieceElement = document.createElement('div');
-                  pieceElement.textContent = piece ? piece.getUnicode() : '';
+                  pieceElement.innerHTML = piece ? piece.getUnicode() : '&nbsp;';
                   pieceElement.style.fontSize = '24px'; // Taille normale pour la pièce
                   container.appendChild(pieceElement);
     
@@ -515,5 +686,122 @@ export const Ui = {
         }
 
         return table;
+    },
+
+    scrollToIndex(board) {
+        const container = document.getElementById('moveHistoryContainer'); // Le conteneur avec scroll
+        const table =  document.getElementById('moveHistoryTable');
+        const rows = table.querySelectorAll('tbody tr'); // Toutes les lignes du tableau
+    
+        const rowIndex = Math.floor((board.currentCellIndex - 1) / 2); // Ligne correspondante
+        const targetRow = rows[rowIndex]; // Ligne sélectionnée
+    
+        // Calculer la position pour scroller
+        const rowTop = targetRow.offsetTop; // Distance entre la ligne et le haut du conteneur
+        const rowHeight = targetRow.offsetHeight; // Hauteur de la ligne
+        const containerHeight = container.clientHeight; // Hauteur visible du conteneur
+    
+        // Centrer la ligne dans le conteneur
+        const scrollPosition = rowTop - (containerHeight / 2) + (rowHeight / 2);
+    
+        // Appliquer le défilement
+        container.scrollTo({
+            top: scrollPosition,
+            behavior: 'smooth' // Défilement fluide
+        });
+    },
+    navigateHistoryTable(board, newIndex) {    
+        // Limiter l'index entre 0 et 2 * nombre de lignes - 1
+        const totalCells = board.pgnNotation.length * 2; // Chaque ligne a 2 cellules navigables
+        if (newIndex < 0 || newIndex > totalCells) {
+            console.warn('Navigation hors des limites');
+            return;
+        }
+    
+        // Mettre à jour l'index courant
+        board.currentCellIndex = newIndex;
+    
+        // Récupérer toutes les lignes du tableau
+        const table = document.getElementById('moveHistoryTable');
+        const rows = table.querySelectorAll('tbody tr');
+    
+        // Si newIndex est 0, retirer toutes les surbrillances
+        if (newIndex === 0) {
+            rows.forEach(row => {
+                row.cells[1].classList.remove('selected-cell'); // Colonne 1
+                row.cells[2].classList.remove('selected-cell'); // Colonne 2
+            });
+
+            // Scroller vers l'index sélectionné
+            this.scrollToIndex(board);
+
+            return; // Rien d'autre à faire
+        }
+    
+        // Calculer la ligne et la colonne à partir de l'index
+        const rowIndex = Math.floor((newIndex - 1) / 2); // Ligne correspondante
+        const columnIndex = (newIndex - 1) % 2 + 1; // Colonne 1 (Coup des Blancs) ou 2 (Coup des Noirs)
+    
+        // Récupérer la cellule correspondante
+        const targetRow = rows[rowIndex];
+        const targetCell = targetRow.cells[columnIndex];
+    
+        if (!targetCell) {
+            console.warn('Cellule cible introuvable');
+            return;
+        }
+    
+        // Supprimer la surbrillance de toutes les cellules navigables
+        rows.forEach(row => {
+            row.cells[1].classList.remove('selected-cell'); // Colonne 1
+            row.cells[2].classList.remove('selected-cell'); // Colonne 2
+        });
+    
+        // Ajouter la surbrillance à la cellule correspondante
+        targetCell.classList.add('selected-cell');
+    
+        // Scroller vers l'index sélectionné
+        this.scrollToIndex(board);
+    },
+    updateButtonStates(board) {
+        // Sélectionner les boutons
+        const redoMoveButton = document.getElementById("redoMove");
+        const undoMoveButton = document.getElementById("undoMove");
+        const resetMoveButton = document.getElementById("resetMove");
+        const lastMoveButton = document.getElementById("lastMove");
+
+        // Activer ou désactiver les boutons en fonction de la taille des piles
+        redoMoveButton.disabled = board.redoStack.length === 0; // Désactiver si redoStack est vide
+        undoMoveButton.disabled = board.movesHistory.length === 0; // Désactiver si movesHistory est vide
+        resetMoveButton.disabled = board.movesHistory.length === 0; // Désactiver si aucun historique
+        lastMoveButton.disabled = board.redoStack.length === 0; // Désactiver si aucun historique
+    }, 
+    inverseBarAndValues(board,barWhiteId, barBlackId, valueWhiteId, valueBlackId) {
+        const whiteBar = document.getElementById(barWhiteId);
+        const blackBar = document.getElementById(barBlackId);
+
+        const whiteValue = document.getElementById(valueWhiteId);
+        const blackValue = document.getElementById(valueBlackId);
+
+        const whiteHeight = whiteBar.style.height;
+        const blackHeight = blackBar.style.height;
+        whiteBar.style.height = blackHeight; // Inverse les hauteurs
+        blackBar.style.height = whiteHeight;
+       
+        const whiteText = whiteValue.innerHTML;
+        const blackText = blackValue.innerHTML;
+
+        whiteValue.innerHTML = blackText;
+        blackValue.innerHTML = whiteText;
+
+        if (board.orientationBoard === Color.BLANC)
+        {
+            whiteBar.style.backgroundColor = "white";
+            blackBar.style.backgroundColor = "black";
+        }
+        else{
+            whiteBar.style.backgroundColor = "black";
+            blackBar.style.backgroundColor = "white";
+        }
     }
 };

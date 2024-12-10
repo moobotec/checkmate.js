@@ -11,7 +11,7 @@ export const Actions = {
    * @param {number} destination - La position de destination (0 à 63).
    * @param {string} type - Le type de mouvement (normal, capture, promotion, etc.).
    */
-  async performMove(board, piece, destination, type = MoveType.NORMAL) {
+  async performMove(board, piece, destination, type = MoveType.NORMAL,pPromotedTo = null) {
     const origin = piece.position;
     let capturedPiece = null;
     let promotedTo = null;
@@ -23,9 +23,14 @@ export const Actions = {
 
       case MoveType.PROMOTION:
         this._movePiece(board, piece, origin, destination);
-        board.updateBoardDisplay(); // Mettre à jour l'affichage
-
-        promotedTo = await this._promotePawn(piece);
+        if (pPromotedTo == null)
+        {
+          board.updateBoardDisplay(); // Mettre à jour l'affichage
+          promotedTo = await this._promotePawn(piece);
+        }
+        else{
+          promotedTo = this._promotePawnByType(piece,pPromotedTo);
+        }
         break;
 
       case MoveType.CAPTURE:
@@ -36,9 +41,14 @@ export const Actions = {
       case MoveType.PROMOTION_CAPTURE:
         capturedPiece = this._capturePiece(board, destination);
         this._movePiece(board, piece, origin, destination);
-        board.updateBoardDisplay(); // Mettre à jour l'affichage
-
-        promotedTo = await this._promotePawn(piece);
+        if (pPromotedTo == null)
+        {
+          board.updateBoardDisplay(); // Mettre à jour l'affichage
+          promotedTo = await this._promotePawn(piece);
+        }
+        else{
+          promotedTo = this._promotePawnByType(piece,pPromotedTo);
+        }
         break;
 
       case MoveType.CASTLING_Q:
@@ -184,7 +194,14 @@ export const Actions = {
    * Gère la promotion d'un pion.
    */
   async _promotePawn(pawn) {
-    const chosenPieceType = await Ui.showPromotionMenuAsync();          
+    const chosenPieceType = await Ui.showPromotionMenuAsync();
+    // Mise à jour de la pièce promue
+    return this._promotePawnByType(pawn,chosenPieceType);
+  },
+  /**
+   * Gère la promotion d'un pion.
+   */
+  _promotePawnByType(pawn,chosenPieceType) {
     // Mise à jour de la pièce promue
     pawn.promotedTo(chosenPieceType);
     return pawn.getFENNotation();

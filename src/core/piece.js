@@ -30,12 +30,12 @@ export const ColorTypeTostring = {
 };
 
 export const PieceValue = {
-  PION: 1000,
-  TOUR: 7000,
-  CHEVAL: 5000,
-  FOU: 3000,
-  ROI: 1,
-  REINE: 10000
+  PION: 100,
+  TOUR: 500,
+  CHEVAL: 320,
+  FOU: 330,
+  ROI: 2000,
+  REINE: 900
 };
 
 // Codes Unicode pour les pièces
@@ -57,6 +57,40 @@ export const UnicodePieces = {
     queen: '♛'
   }
 };
+
+export const LetterPieces = {
+  white: { //BLANC
+    pawn: 'P',
+    rook: 'R',
+    knight: 'N',
+    bishop: 'B',
+    king: 'K',
+    queen: 'Q'
+  },
+  black: { //NOIR
+    pawn: 'p',
+    rook: 'r',
+    knight: 'n',
+    bishop: 'b',
+    king: 'k',
+    queen: 'q'
+  }
+};
+
+export const UnicodeToLetter = {
+    '♙': 'P',
+    '♖': 'R',
+    '♘': 'N',
+    '♗': 'B',
+    '♔': 'K',
+    '♕': 'Q',
+    '♟': 'p',
+    '♜': 'r',
+    '♞': 'n',
+    '♝': 'b',
+    '♚': 'k',
+    '♛': 'q'
+}
 
 function uuidShort() {
   return 'xxxxxxxx'.replace(/x/g, function () {
@@ -148,17 +182,7 @@ export class Piece {
 
   // Génère une notation FEN pour cette pièce
   getFENNotation() {
-    const fenMap = {
-      [PieceType.PION]: "P",
-      [PieceType.TOUR]: "R",
-      [PieceType.CHEVAL]: "N",
-      [PieceType.FOU]: "B",
-      [PieceType.ROI]: "K",
-      [PieceType.REINE]: "Q"
-    };
-    return this.color === Color.BLANC
-      ? fenMap[this.type]
-      : fenMap[this.type].toLowerCase();
+    return LetterPieces[ColorTypeTostring[this.color]][PieceTypeToString[this.type]];
   }
 
   getSummary() {

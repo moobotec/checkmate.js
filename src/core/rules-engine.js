@@ -124,7 +124,7 @@ export const Rules = {
         tempBoard.removePiece(piece);
     
         // Vérifier si le roi est en échec après avoir retiré la pièce
-        return this.isKingInCheck(tempBoard, piece.color,false);
+        return this.isKingInCheck(tempBoard, piece.color);
     },
 
     isAligned(pos1, pos2) {
@@ -137,20 +137,16 @@ export const Rules = {
         return row1 === row2 || col1 === col2 || Math.abs(row1 - row2) === Math.abs(col1 - col2);
     },
   
-    isKingInCheck(board,color,isCheckPiecePined = false) {
+    isKingInCheck(board,color) {
         // Trouver la position du roi de la couleur donnée
         const king = board.getKingByColor(color);
         const kingPosition = king.position;
         
         // Vérifier toutes les pièces adverses
         const opponentPieces = board.pieces.filter(piece => piece.color !== color && piece.isActive);
+
         for (const piece of opponentPieces) {
             try {
-                // Vérifier si la pièce adverse est clouée
-                if (isCheckPiecePined == true && this.isPiecePinned(board, piece)) {
-                    continue; // Ignorer les pièces clouées
-                }
-
                 // Si une pièce adverse peut se déplacer sur la position du roi, le roi est en échec
                 if (piece.isValidMove(board,kingPosition)) {
                     return true; // En échec
@@ -197,10 +193,6 @@ export const Rules = {
                     // Si un mouvement est valide et retire le roi de l'échec, ce n'est pas un échec et mat
                     if (this.isValidMove(board,originalPosition,destination)) {
   
-                        /*const isStillInCheck  = Actions.simulateMove(board,piece, destination, destination , () => {
-                            return this.isKingInCheck(board,color);
-                        });*/
-
                           // Simuler le déplacement
                           const targetPiece = board.getPieceAt(destination);
                           piece.position = destination;
@@ -351,7 +343,7 @@ export const Rules = {
         let isCheckmate = false;
         let isStalemate = false;
         const opponentColor = board.currentTurnColor === Color.BLANC ? Color.NOIR : Color.BLANC;
-        let isMaterialInsufficient = !this.hasEnoughPiecesForCheckmate(board,opponentColor);
+        let isMaterialInsufficient = !this.hasEnoughPiecesForCheckmate(board,opponentColor) && !this.hasEnoughPiecesForCheckmate(board,board.currentTurnColor);
         if (!isMaterialInsufficient)
         {
             isCheck = this.isKingInCheck(board,opponentColor);
