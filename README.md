@@ -37,6 +37,13 @@ CheckMat.js est une bibliothèque JavaScript complète et autonome dédiée à l
 
 ---
 
+## **Démo en ligne**
+
+Testez CheckMat.js directement ici :  
+➡️ [https://checkmat.timecaps.fr/](https://checkmat.timecaps.fr/)
+
+---
+
 ## **Installation**
 
 ### 1. Téléchargement
