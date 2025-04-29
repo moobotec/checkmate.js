@@ -49,7 +49,7 @@ Testez CheckMat.js directement ici :
 ### 1. Téléchargement
 Clonez le dépôt GitHub pour obtenir les fichiers source :
 ```bash
-git clone https://github.com/votre-utilisateur/checkmat.js.git
+git clone [https://github.com/votre-utilisateur/checkmat.js.git](https://github.com/moobotec/checkmate.js.git)
 ```
 
 ### 2. Inclusion dans le projet
